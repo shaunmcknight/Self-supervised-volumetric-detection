@@ -94,13 +94,13 @@ def experimental(HP, transforms, exp_path, iteration):
 #optimisation of experimental data
 HP = {'n_epochs': 1000, #300
       'batch_size': 512, #1024
-      'lr': 0.005, #0.003,
+      'lr': 0.001, #0.0005,
       'momentum': 0.175764011181887,
       'early_stop': 0,
       'conv_layers': 3,
       'out_channel_ratio': 3,
       'FC_layers': 1,
-      'folder':'exp_4'
+      'folder':'dist'
       }
 
 hp = Hyperparameters(

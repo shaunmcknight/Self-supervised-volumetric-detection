@@ -30,7 +30,8 @@ class CNN(nn.Module):
         
         # self.conv_reduction = nn.Conv1d(8,8,kernel_size=8, stride=8)
         self.gap = nn.AvgPool1d(8)
-        self.linear = nn.Linear(self.c3*3, 1)
+        self.linear_hidden = nn.Linear(self.c3*3, 96)
+        self.linear = nn.Linear(96, 1)
         
     def _conv_layer_set(self, in_c, out_c, kernel_size):
         conv_layer = nn.Sequential(
@@ -54,5 +55,6 @@ class CNN(nn.Module):
         # out=out.flatten()
         out = self.gap(out)
         # print(out.size())
-        out = self.linear(out.squeeze().squeeze())
-        return out
+        mean = self.linear(self.linear_hidden(out.squeeze().squeeze()))
+        std = self.linear(self.linear_hidden(out.squeeze().squeeze()))
+        return mean, std
