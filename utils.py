@@ -33,7 +33,9 @@ class CleanDataset(Dataset):
         self.id007=np.load(r'C:/Users/Shaun McKnight/OneDrive - University of Strathclyde/SEARCH NDE/Composites/Exp Data/Spirit Cell/New scans/ID007/ID007_hilbert_raster.npy')
         self.id007=self.preprocess_data(self.id007)
         self.id007=self.id007[:260,:501,:]+1 # shift data
-            
+        
+        plt.imshow(self.id007[:,:,10], aspect='auto')
+        plt.show()
         print('~~~~ Synthetic dataloader INFO ~~~~~')
         print('Number points train ~ ', 'Max/Min ', np.amax(self.id007), np.amin(self.id007))
         #length 500 time series
@@ -179,32 +181,3 @@ class TestDataset(Dataset):
         length=int(total_series*time_step*elements)
         print('length should be: 97600 but is: ', length) #may need to do -1 for indexing (probably not)
         return length
-
-# class ExperimentalDataset(Dataset):
-#     def __init__(self, root, transforms_=None, mode="test"):
-#         self.transform = transforms.Compose(transforms_)
-        
-#         self.files_defect = np.load(glob.glob(os.path.join(root, "%s_defect" % mode) + "/*.*")[0])
-#         self.labels_defect = np.zeros(np.shape(self.files_defect)[0])
-        
-#         self.files_no_defect = np.load(glob.glob(os.path.join(root, "%s_no_defect" % mode) + "/*.*")[0])
-#         self.labels_no_defect = np.zeros(np.shape(self.files_no_defect)[0])
-        
-#         self.combined_data = np.concatenate((self.files_defect, self.files_no_defect))
-#         self.labels = np.concatenate((self.labels_defect, self.labels_no_defect))
-            
-#         print('~~~~ Synthetic dataloader INFO ~~~~~')
-#         print('Number defective points train ~ ', len(self.files_defect), 'Max/Min ', np.amax(self.files_defect), np.amin(self.files_defect))
-#         print('Number defect free points train ~ ', len(self.files_no_defect), 'Max/Min ', np.amax(self.files_no_defect), np.amin(self.files_no_defect))
-
-#     def __getitem__(self, index):
-#         data = torch.from_numpy(self.combined_data[index])
-#         data = data.unsqueeze(0)
-#         label = self.labels[index]
-#         if self.transform != None:
-#             data = self.transform(data)
-#         # print('Image shape ', np.shape(image))
-#         return data, label
-
-#     def __len__(self):
-#         return len(self.combined_data)

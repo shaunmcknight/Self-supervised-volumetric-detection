@@ -331,8 +331,8 @@ def calculate_errors(predictions, targets):
 def get_save_path(indx, folder):
     CURRENT_DIR = os.getcwd()
     BASE_OUTPUT = "saved_models"
-    MODEL_PATH = os.path.join(CURRENT_DIR, BASE_OUTPUT, folder, "epoch_{}_".format(indx) + "model.pt")
-    MODEL_PATH_BEST = os.path.join(CURRENT_DIR, BASE_OUTPUT, folder, "best_model_epoch_{}_".format(indx) + "model.pt")
+    MODEL_PATH = os.path.join(CURRENT_DIR, BASE_OUTPUT, folder, "epoch_{}_".format(indx) + "model.pth")
+    MODEL_PATH_BEST = os.path.join(CURRENT_DIR, BASE_OUTPUT, folder, "best_model_epoch_{}_".format(indx) + "model.pth")
     return MODEL_PATH, MODEL_PATH_BEST
     
 def plot_roc(true_list, pred_list_raw):
