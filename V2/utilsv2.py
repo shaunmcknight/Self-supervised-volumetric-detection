@@ -9,9 +9,10 @@ from matplotlib.pyplot import figure
 
 
 class CleanDataset(Dataset):
-    def __init__(self, data, transforms=['flip', 'erase', 'noise'], label=None):
+    def __init__(self, data, transforms=['flip', 'erase', 'noise'], label=None, stride=1):
         assert [np.isnan(data).any() for data in data], f"Input data contains NaN values"
         self.transform = transforms
+        self.stride=stride
         self.data = [np.reshape(data, (data.shape[0], -1)) for data in data]
         self.data = np.concatenate(self.data, axis =1)
         # self.data = self.data+1 # shift data # removed as calculating distributions
@@ -23,7 +24,7 @@ class CleanDataset(Dataset):
         # done after applying hilbert transform
         shifted_ut = np.zeros(data.shape)
         for i in range(data.shape[0]):
-            for j in range(data.shape[2]):\
+            for j in range(data.shape[2]):
                 # a_scan = data[i,:,j]
                 # peak = np.argmax(a_scan)
                 # shifted_a_scan = a_scan[peak::]
@@ -72,21 +73,24 @@ class CleanDataset(Dataset):
         noise_std = noise_std * np.nanmedian(time_series)
 
         if np.random.rand() < p:
-            noise_length = np.random.randint(1, 9)
-            noise = np.random.normal(noise_mean, noise_std, noise_length)
-            start_idx = np.random.randint(0, len(time_series) - noise_length)
-            noisy_time_series[start_idx:start_idx + noise_length] += noise
+            noise = np.random.normal(noise_mean, noise_std, noisy_time_series.shape)
+            noisy_time_series+=noise
 
         return noisy_time_series
 
         
-    def __getitem__(self, index):       
-        index=np.unravel_index(index, (self.data.shape[0], self.data.shape[1]))
+    def __getitem__(self, index):  
+        num_windows_per_sequence = ((self.data.shape[0] - 65) // self.stride) + 1
 
-        base_data=self.data[index[0]:index[0]+65,index[1]]
+        sequence_index = index // num_windows_per_sequence
+        window_index = index % num_windows_per_sequence
+        
+        start_index = window_index * self.stride
+        
+        base_data = self.data[start_index:start_index+65, sequence_index]
         
         if 'flip' in str(self.transform):
-            if np.random.randint(0,2)==1:
+            if np.random.rand() < 0.5:
                 base_data = np.flip(base_data)
             
         data = base_data[:64]
@@ -100,10 +104,10 @@ class CleanDataset(Dataset):
         return torch.from_numpy(np.copy(data)).unsqueeze(0), torch.from_numpy(np.copy(label)).unsqueeze(0)
         #At least one stride in the given numpy array is negative, and tensors with negative strides are not currently supported. (You can probably work around this by making a copy of your array  with array.copy().) 
 
-    def __len__(self, stride=1):
+    def __len__(self):
         sequence_length=self.data.shape[0] #overlapping series windows
         window_length=65
-        num_windows = ((sequence_length - window_length) // stride) + 1
+        num_windows = ((sequence_length - window_length) // self.stride) + 1
         total_windows=self.data.shape[1]*num_windows
         return total_windows
     
