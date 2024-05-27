@@ -8,14 +8,14 @@ import torch.nn as nn
 from torchinfo import summary
 
 import matplotlib.pyplot as plt
-import scienceplots
+# import scienceplots
 from tqdm import tqdm
 from sklearn import metrics 
 
 from config import hp
-from classifierv2 import CNN
+from classifierv2 import CNN, CNN_shared, CNN_shared_new, CNN_shared_relu
 
-plt.style.use(['science', 'ieee','no-latex', 'bright'])
+# plt.style.use(['science', 'ieee','no-latex', 'bright'])
 
 ##############################################
 # Defining all hyperparameters
@@ -69,35 +69,37 @@ class Trainer:
         self.dataloader_train = dataloader_train
         self.dataloader_validation = dataloader_validation
         self.dataloader_test = dataloader_test
-        self.epochs_without_improvement = None
+        self.steps_without_improvement = None
         self.training_losses = []
         self.validation_losses = []
 
-        self.Net = CNN()
+        self.Net = CNN_shared_relu()
         print(summary(self.Net, input_size=(hp.batch_size, 1, 64)))
-        self.criterion = NegativeNormalLoss()
+        self.criterion = NegativeWeibullLoss()
         self.optimizer = torch.optim.Adam(self.Net.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
         self.cuda = True if torch.cuda.is_available() else False
         print("Using CUDA" if self.cuda else "Not using CUDA")
         self.Tensor = torch.cuda.FloatTensor if self.cuda else torch.Tensor
         if self.cuda:
-            self.Net = self.Net.float().cuda()
-            self.criterion = self.criterion.cuda()
+            device = torch.device(hp.device)
+            self.Net = self.Net.float().to(device)
+            self.criterion = self.criterion.to(device)
 
-    def train(self):
+    def train(self, step_limit=100):
         # TRAINING
         self.start_time = time.time()
         self.Net.train()
+        step=0
         epoch=0
         best_val_loss = float('inf')
         self.early_stop = False
+        training_loss=[]
         while self.early_stop == False:
-            epoch+=1
-            training_loss=[]
             pbar = tqdm(self.dataloader_train, total=len(self.dataloader_train), desc=f'Epoch {epoch}')
-            for batch in pbar:
+            for iteration, batch in enumerate(pbar):
                 self.optimizer.zero_grad()
                 data, labels = self.prepare_data(batch)
+                print(data.shape)
                 out_means, out_std = self.Net(data)
                 
                 try:
@@ -113,28 +115,44 @@ class Trainer:
 
 
                 training_loss.append(loss.item())
-                minutes, seconds = divmod(time.time() - self.start_time, 60)
-                pbar.set_postfix({'loss': loss.item(), 'elapsed_time': f'{int(minutes)}m {int(seconds)}s'}, refresh=True)
+                               
+                # Update progress bar
+                pbar.set_postfix({
+                    'loss': np.mean(training_loss)},
+                    refresh=True)
                 pbar.update()
-                
-            self.training_losses.append(np.mean(training_loss))
-
-            validation_loss = self.test(self.Net, self.dataloader_validation) # Evaluate the model on the validation set after each epoch
-
-            self.validation_losses.append(validation_loss)
-            if validation_loss < best_val_loss:
-                best_val_loss = validation_loss
-                best_model = self.Net.state_dict()  # Save the best model
-                self.epochs_without_improvement = 0
-                print('New lowest loss {} at epoch {}'.format(best_val_loss, epoch))
-            else:
-                self.epochs_without_improvement += 1
-                print('Epochs without improvement: {epochs_without_improvement}')
+                step+=1
+            
+                if step%step_limit==0:     
                     
-            self.early_stop = self.early_stop(epoch) 
-
-        torch.save(best_model, os.join(hp.save_path, f'{str(self.iteration)}_best_model.pth'))
+                    self.training_losses.append(np.mean(training_loss))
+        
+                    validation_loss = self.test(self.Net, self.dataloader_validation, label='Validation') # Evaluate the model on the validation set after each step
+                    print('')
+                    print(f'Evaluating at step interval {step}')
+                    print(f'Validation loss ~~ {validation_loss}')
+                    self.validation_losses.append(validation_loss)
+                    if validation_loss < best_val_loss:
+                        best_val_loss = validation_loss
+                        best_model = self.Net.state_dict()  # Save the best model
+                        self.steps_without_improvement = 0
+                        print('New lowest loss {} at step {}'.format(best_val_loss, step))
+                    else:
+                        self.steps_without_improvement += 1
+                        print(f'Steps without improvement: {self.steps_without_improvement}')
+                            
+                    self.early_stop = self.check_early_stop(step)
+                    if self.early_stop:
+                        break
+                    training_loss=[]
+                    print("") 
+                    
+            epoch+=1
+                
+        torch.save(best_model, os.path.join(hp.save_path, f'{str(self.iteration)}_best_model.pth'))
         self.Net.load_state_dict(best_model)
+        np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_train_loss.npy'), self.training_losses)
+        np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_validation_loss.npy'), self.validation_losses)
         print('Finished Training')
         self.print_training_time()
     
@@ -143,31 +161,36 @@ class Trainer:
         loss_total = []
         Net.eval()
         with torch.no_grad():
-            for batch in tqdm(datloader, total=len(datloader), desc=f'{label}'):
+            pbar = tqdm(datloader, total=len(datloader), desc=f'{label}', disable=True)
+            for batch in pbar:
                 data, labels = self.prepare_data(batch)            
                 out_means, out_std = Net(data)
 
                 loss = self.criterion(out_means.squeeze(), out_std.squeeze(), labels.squeeze())
                 
                 loss_total.append(loss.item())
+                
+                pbar.set_postfix(
+                    refresh=True)
+                pbar.update()
+                
         loss_total = np.mean(loss_total)
-        self.validation_losses.append(loss_total)
-        self.print_training_time(prev_time, label)
+        # self.print_training_time(prev_time, label)
         return loss_total
 
-    def early_stop(self, epoch):
-        if self.epochs_without_improvement >= hp.patience:
-            print(f"Early stopping at epoch {epoch + 1}.")
+    def check_early_stop(self, step):
+        if self.steps_without_improvement >= hp.patience:
+            print(f"Early stopping at step {step}.")
             return True
         return False
 
     def print_training_time(self, prev_time=None, label = ''):
-        if prev_time:
+        if not prev_time:
             print('Total training time ', datetime.timedelta(seconds=time.time()-self.start_time))
         else:
             print(f'{label} time taken ', datetime.timedelta(seconds=time.time()-prev_time))
 
-    def plot_training_loss(self):
+    def plot_training_loss(self, save_path=None):
         self.plot_losses(self.training_losses, loss_val=self.validation_losses, save_path=None)
 
     def prepare_data(self, batch):
@@ -175,25 +198,30 @@ class Trainer:
         data = data.type(self.Tensor)
         labels = labels.type(self.Tensor)
         if self.cuda:
-            data = data.cuda()
-            labels = labels.cuda()
+            device = torch.device(hp.device)
+            data = data.to(device)
+            labels = labels.to(device)
         return data, labels
     
     def plot_losses(self, train_loss, loss_val=None, save_path=None):
-        with plt.style.context(['science', 'ieee','no-latex', 'bright']):
-            plt.rcParams.update({
-            "font.family": "serif",   
-            "font.serif": ["Times New Roman"],
-            "font.size": 12})
-            plt.figure(figsize = (7,5))
-            plt.plot(train_loss, label='train')
-            if loss_val:
-                plt.plot(loss_val, label='validation')
-            plt.title('Losses')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.yscale("log")
-            plt.legend()
-            if save_path:
-                plt.savefig(save_path)
-            plt.show()
+        minimum = min(train_loss)
+        if loss_val:
+            minimum=min(min(train_loss), min(loss_val))
+        # minimum =0 
+        # with plt.style.context(['science', 'ieee','no-latex', 'bright']):
+        #     plt.rcParams.update({
+        #     "font.family": "serif",   
+        #     "font.serif": ["Times New Roman"],
+        #     "font.size": 12})
+        plt.figure(figsize = (7,5))
+        plt.plot(np.array(train_loss)-minimum, label='train')
+        if loss_val:
+            plt.plot(np.array(loss_val)-minimum, label='validation')
+        plt.title('Losses')
+        plt.xlabel('Step')
+        plt.ylabel('Loss')
+        plt.yscale('log')
+        plt.legend()
+        if save_path:
+            plt.savefig(save_path)
+        plt.show()
