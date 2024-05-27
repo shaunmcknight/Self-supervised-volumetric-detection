@@ -73,8 +73,9 @@ class Trainer:
         self.training_losses = []
         self.validation_losses = []
 
-        self.Net = CNN_shared_relu()
+        self.Net = CNN_shared()
         print(summary(self.Net, input_size=(hp.batch_size, 1, 64)))
+        self.criterion = NegativeWeibullLoss()
         self.criterion = NegativeWeibullLoss()
         self.optimizer = torch.optim.Adam(self.Net.parameters(), lr=hp.learning_rate, weight_decay=hp.weight_decay)
         self.cuda = True if torch.cuda.is_available() else False
@@ -86,16 +87,20 @@ class Trainer:
             self.criterion = self.criterion.to(device)
 
     def train(self, step_limit=100):
+    def train(self, step_limit=100):
         # TRAINING
         self.start_time = time.time()
         self.Net.train()
+        step=0
         step=0
         epoch=0
         best_val_loss = float('inf')
         self.early_stop = False
         training_loss=[]
+        training_loss=[]
         while self.early_stop == False:
             pbar = tqdm(self.dataloader_train, total=len(self.dataloader_train), desc=f'Epoch {epoch}')
+            for iteration, batch in enumerate(pbar):
             for iteration, batch in enumerate(pbar):
                 self.optimizer.zero_grad()
                 data, labels = self.prepare_data(batch)
@@ -115,6 +120,11 @@ class Trainer:
 
 
                 training_loss.append(loss.item())
+                               
+                # Update progress bar
+                pbar.set_postfix({
+                    'loss': np.mean(training_loss)},
+                    refresh=True)
                                
                 # Update progress bar
                 pbar.set_postfix({
@@ -150,7 +160,38 @@ class Trainer:
             epoch+=1
                 
         torch.save(best_model, os.path.join(hp.save_path, f'{str(self.iteration)}_best_model.pth'))
+                step+=1
+            
+                if step%step_limit==0:     
+                    
+                    self.training_losses.append(np.mean(training_loss))
+        
+                    validation_loss = self.test(self.Net, self.dataloader_validation, label='Validation') # Evaluate the model on the validation set after each step
+                    print('')
+                    print(f'Evaluating at step interval {step}')
+                    print(f'Validation loss ~~ {validation_loss}')
+                    self.validation_losses.append(validation_loss)
+                    if validation_loss < best_val_loss:
+                        best_val_loss = validation_loss
+                        best_model = self.Net.state_dict()  # Save the best model
+                        self.steps_without_improvement = 0
+                        print('New lowest loss {} at step {}'.format(best_val_loss, step))
+                    else:
+                        self.steps_without_improvement += 1
+                        print(f'Steps without improvement: {self.steps_without_improvement}')
+                            
+                    self.early_stop = self.check_early_stop(step)
+                    if self.early_stop:
+                        break
+                    training_loss=[]
+                    print("") 
+                    
+            epoch+=1
+                
+        torch.save(best_model, os.path.join(hp.save_path, f'{str(self.iteration)}_best_model.pth'))
         self.Net.load_state_dict(best_model)
+        np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_train_loss.npy'), self.training_losses)
+        np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_validation_loss.npy'), self.validation_losses)
         np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_train_loss.npy'), self.training_losses)
         np.save(os.path.join(hp.save_path, f'{str(self.iteration)}_validation_loss.npy'), self.validation_losses)
         print('Finished Training')
@@ -161,6 +202,8 @@ class Trainer:
         loss_total = []
         Net.eval()
         with torch.no_grad():
+            pbar = tqdm(datloader, total=len(datloader), desc=f'{label}', disable=True)
+            for batch in pbar:
             pbar = tqdm(datloader, total=len(datloader), desc=f'{label}', disable=True)
             for batch in pbar:
                 data, labels = self.prepare_data(batch)            
@@ -174,10 +217,19 @@ class Trainer:
                     refresh=True)
                 pbar.update()
                 
+                
+                pbar.set_postfix(
+                    refresh=True)
+                pbar.update()
+                
         loss_total = np.mean(loss_total)
+        # self.print_training_time(prev_time, label)
         # self.print_training_time(prev_time, label)
         return loss_total
 
+    def check_early_stop(self, step):
+        if self.steps_without_improvement >= hp.patience:
+            print(f"Early stopping at step {step}.")
     def check_early_stop(self, step):
         if self.steps_without_improvement >= hp.patience:
             print(f"Early stopping at step {step}.")
@@ -186,10 +238,12 @@ class Trainer:
 
     def print_training_time(self, prev_time=None, label = ''):
         if not prev_time:
+        if not prev_time:
             print('Total training time ', datetime.timedelta(seconds=time.time()-self.start_time))
         else:
             print(f'{label} time taken ', datetime.timedelta(seconds=time.time()-prev_time))
 
+    def plot_training_loss(self, save_path=None):
     def plot_training_loss(self, save_path=None):
         self.plot_losses(self.training_losses, loss_val=self.validation_losses, save_path=None)
 
