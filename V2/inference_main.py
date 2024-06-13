@@ -233,7 +233,7 @@ def main():
 
     #process forward sweep
     evaluator = Evaluator(threshold = 0.99999)
-    evaluator.initialise_network('/media/cue-server/ubuntuStorage/ShaunMcKnight/Self-supervised-volumetric-detection-2/V2/results/stride_2/1_best_model.pth')
+    evaluator.initialise_network('stride_2_1_best_model.pth')
     evaluator.volume_forward = evaluator.evaluate_sweep(dataset).cpu().numpy()
     evaluator.visualise_data(evaluator.volume_forward)
 

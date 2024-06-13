@@ -131,14 +131,14 @@ class VisualiseVolume(QMainWindow):
     def load_data(self, path, segmentation, segmentation_2):
         #[30:224, :80, :]
         #[0:480, :105, 12:]
-        self.data = np.load(os.path.join(path, 'test_volume.npy'))[:,0:1000:3,:]#[30:260, :, :]
-        self.segmentation = np.load(os.path.join(path, segmentation))[:,0:1000:3,:]#[30:260, :, :]#[30:224, :80, :]
-        # self.data = np.swapaxes(self.data, 0, 2)
-        # self.segmentation = np.swapaxes(self.segmentation, 0, 2)
+        self.data = np.load(os.path.join(path, 'test_volume.npy'))#[:,0:1000:3,:]#[30:260, :, :]
+        self.segmentation = np.load(os.path.join(path, segmentation))#[:,0:355:1,:]#[30:260, :, :]#[30:224, :80, :]
+        self.data = np.swapaxes(self.data, 0, 2)
+        self.segmentation = np.swapaxes(self.segmentation, 0, 2)
         # self.segmentation = np.swapaxes(self.segmentation, 0, 2)#[0:480, :105, 12:]
         if segmentation_2:
             self.segmentation_2 = np.load(os.path.join(path, segmentation_2))[30:, :80, :]
-        self.setup_new_plot()
+        # self.setup_new_plot()
         # Flip first 64 elements of the array along axis 1
         # self.data[:64] = np.flip(self.data[:64], axis=1)
         # self.segmentation[:64] = np.flip(self.segmentation[:64], axis=1)
@@ -209,13 +209,15 @@ class VisualiseVolume(QMainWindow):
 def plot_cscan(data, depth=0, segmentation=None, path=None, tof=False):    
     with plt.style.context(['science', 'no-latex']):
         plt.rcParams["font.family"] = "Times New Roman",
-        plt.rcParams.update({'font.size': 16})
-        plt.figure(figsize=(5, 3))
+        plt.rcParams.update({'font.size': 14})
+        plt.figure(figsize=(10, 6))
         #plot thresholds against mea and std as error bars
         if tof:
             plt.imshow(np.argmax(data[:, depth:, :], axis = 1))#
         else:
             plt.imshow(np.amax(data[:, depth:, :], axis = 1))
+            plt.clim(0, 1)
+
         if segmentation is not None:
             #custom colour map to set the 0 values to 0 alpha values
             num_colors = 256
@@ -227,6 +229,11 @@ def plot_cscan(data, depth=0, segmentation=None, path=None, tof=False):
             custom_colors[:, 0] = 240 / 255.0  # Red channel
             custom_colors[:, 1] = 228 / 255.0  # Green channel
             custom_colors[:, 2] = 66 / 255.0  # Blue channel
+
+            # Set RGB values to (240, 228, 66)
+            custom_colors[:, 0] = 212 / 255.0  # Red channel
+            custom_colors[:, 1] = 21 / 255.0  # Green channel
+            custom_colors[:, 2] = 21 / 255.0  # Blue channel
 
             custom_colors[:, 3] = np.linspace(0, 1, num_colors)  # Alpha channel ranges from 0 (transparent) to 1 (opaque)
 
@@ -417,32 +424,38 @@ def compare_centroids(test_db, test_seg):
     distance = np.sqrt(np.sum((np.array(centroid_test_db) - np.array(centroid_test_seg))**2))
     return distance
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = VisualiseVolume()
-    path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\ID018'
-    path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\padding'
-    path = r'C:\Users\Shaun McKnight\OneDrive - University of Strathclyde\PhD\lear\rectified_averaged'
-    segmentation='0.9999999_forward.npy'
-    segmentation='0.9999999_backward.npy'
-    segmentation='0.9999999_combined.npy'
-    segmentation='0.99999_thresholded.npy'
-    window.load_data(path, segmentation=segmentation, segmentation_2=None)
-    print(window.data.shape)
-    print(window.segmentation.shape)
-    window.show()
-    save_path = r'C:\Users\Shaun McKnight\OneDrive - University of Strathclyde\PhD\Publications\Journal\SSL\media'
-    depth = 250
-    part = segmentation.split('_')[-1].split('.npy')[0]
-    # plot_cscan(np.swapaxes(window.data, 0,2), depth=depth)#, path=os.path.join(save_path, 'test_data.png'))
-    # plot_cscan(np.swapaxes(window.data, 0,2), depth=depth, segmentation=np.swapaxes(window.segmentation, 0,2), path=os.path.join(save_path, f'{part}.png'))
-    plot_cscan(window.data, depth=depth, segmentation=window.segmentation)
-    # plt.imshow(window.data[:, :, 64], aspect='auto')
-    # plot_bscan(window.data, segmentation=None, idx=2, path=None)
-    # plot_bscan(window.data, segmentation=window.segmentation, idx=2, path=None)
-    # depths, centers = get_depths(window.data, window.segmentation)
-    # plot_cscan_depths(window.segmentation, depths=[], centers=[])
-    # plot_bscan(window.data, segmentation=None, idx=167, path=None) # 335, 402 
-    # plot_bscan(window.data, segmentation=window.segmentation, idx=167, path=None) # 335, 402 
-    # compare_centers(window.data, window.segmentation)
-    sys.exit(app.exec_())
+# if __name__ == "__main__":
+app = QApplication(sys.argv)
+window = VisualiseVolume()
+path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\ID018'
+path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\padding'
+path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\lear\hilbert'
+path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\lear\rectified'
+path = r'C:\GIT\Self-supervised-volumetric-detection\V2\inference\lear\belfast\moving_average'
+segmentation='0.9999999_forward.npy'
+segmentation='0.9999999_backward.npy'
+segmentation='0.9999999_combined.npy'
+segmentation='0.999_thresholded.npy'
+window.load_data(path, segmentation=segmentation, segmentation_2=None)
+# window.setup_new_plot()
+print(window.data.shape)
+print(window.segmentation.shape)
+# window.show()
+save_path = r'C:\Users\Shaun McKnight\OneDrive - University of Strathclyde\PhD\Publications\Journal\SSL\media'
+save_path = r'C:\Users\Shaun McKnight\OneDrive - University of Strathclyde\PhD\Thesis\media\chapter 6'
+depth = 30
+part = segmentation.split('_')[-1].split('.npy')[0]
+# plot_cscan(np.swapaxes(window.data, 0,2), depth=depth)#, path=os.path.join(save_path, 'test_data.png'))
+# plot_cscan(np.swapaxes(window.data, 0,2), depth=depth, segmentation=np.swapaxes(window.segmentation, 0,2), path=os.path.join(save_path, f'{part}.png'))
+# plot_cscan(window.data[:,:,:], depth=depth, segmentation=window.segmentation[:,:,:])#, path=os.path.join(save_path, 'rectified.png'))
+plot_cscan(np.flip(window.data[10:,:,25:155], axis=(0,2)), depth=depth, segmentation=None, tof=False, path=os.path.join(save_path, 'tecnatom_clear.png'))
+# plot_cscan(np.flip(window.data[10:,:,25:155], axis=(0,2)), depth=depth, segmentation=np.flip(window.segmentation[10:,:350,25:155], axis=(0,2)), tof=True)#, path=os.path.join(save_path, 'tecnatom.png'))
+# plt.imshow(window.data[:, :, 64], aspect='auto')
+# plot_bscan(window.data, segmentation=None, idx=2, path=None)
+# plot_bscan(window.data, segmentation=window.segmentation, idx=2, path=None)
+# depths, centers = get_depths(window.data, window.segmentation)
+# plot_cscan_depths(window.segmentation, depths=[], centers=[])
+plot_bscan(window.data, segmentation=None, idx=167, path=None) # 335, 402 
+plot_bscan(window.data, segmentation=window.segmentation, idx=167, path=None) # 335, 402 
+# compare_centers(window.data, window.segmentation)
+sys.exit(app.exec_())
